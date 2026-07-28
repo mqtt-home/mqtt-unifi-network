@@ -1,0 +1,67 @@
+project_name: mqtt-unifi-network
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - sh -c "cd web && npm install -g pnpm@11.5.1 && pnpm install --frozen-lockfile && pnpm run build"
+
+builds:
+  - id: mqtt-unifi-network
+    main: ./main.go
+    binary: mqtt-unifi-network
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/mqtt-home/mqtt-unifi-network/version.Version={{.Version}} -X github.com/mqtt-home/mqtt-unifi-network/version.GitCommit={{.Commit}} -X github.com/mqtt-home/mqtt-unifi-network/version.BuildTime={{.Date}}
+
+dockers:
+  - image_templates:
+      - "pharndt/mqtt-unifi-network:{{ .Tag }}-amd64"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    extra_files:
+      - web/dist/
+    skip_push: false
+
+  - image_templates:
+      - "pharndt/mqtt-unifi-network:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    extra_files:
+      - web/dist/
+    skip_push: false
+
+docker_manifests:
+  - id: tag
+    name_template: "pharndt/mqtt-unifi-network:{{ .Tag }}"
+    image_templates:
+      - pharndt/mqtt-unifi-network:{{ .Tag }}-amd64
+      - pharndt/mqtt-unifi-network:{{ .Tag }}-arm64
+
+  - id: latest
+    name_template: "pharndt/mqtt-unifi-network:latest"
+    image_templates:
+      - pharndt/mqtt-unifi-network:{{ .Tag }}-amd64
+      - pharndt/mqtt-unifi-network:{{ .Tag }}-arm64
+
+release:
+  disable: false
+  mode: replace
+  draft: false
+  prerelease: auto
+  make_latest: true
+  skip_upload: true

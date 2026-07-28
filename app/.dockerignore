@@ -1,0 +1,9 @@
+# Without this, `COPY web/ .` drags the host's node_modules into the image and
+# pnpm aborts ("ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY") rather than wipe a
+# modules dir it did not create. CI never hits it — a fresh checkout has no
+# node_modules — but `make docker` on the laptop does.
+**/node_modules
+web/dist
+build
+.git
+*.md

@@ -1,0 +1,10 @@
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+
+COPY mqtt-unifi-network /mqtt-unifi-network
+COPY web/dist /web/dist
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/mqtt-unifi-network", "/var/lib/mqtt-unifi-network/config.json"]
