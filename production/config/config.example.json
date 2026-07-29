@@ -6,10 +6,21 @@
     "retain": true
   },
   "unifi": {
-    "host": "10.10.x.x",
+    "host": "https://10.1.0.1",
     "username": "your-user",
     "password": "your-password",
-    "polling_interval": 30
+    "verify-ssl": false,
+    "site": "default",
+    "polling_interval": 30,
+    "away_delay": 300,
+    "floors": {
+      "aa:bb:cc:00:00:01": "eg",
+      "OG-Flur": "og"
+    },
+    "devices": [
+      { "name": "Philipp", "mac": "11:22:33:44:55:66" },
+      { "name": "Anna", "mac": "77:88:99:aa:bb:cc" }
+    ]
   },
   "web": {
     "enabled": true,

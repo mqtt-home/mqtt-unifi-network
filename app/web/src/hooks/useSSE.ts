@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Status } from '@/types/status';
+import type { Snapshot } from '@/types/presence';
 import { API_BASE } from '@/lib/api';
 
 interface SSEHookReturn {
-  status: Status | null;
+  snapshot: Snapshot | null;
   isConnected: boolean;
   error: string | null;
   reconnect: () => void;
 }
 
-// Live status over Server-Sent Events. EventSource reconnects on its own, but
-// not after a server-side close — hence the explicit retry timer.
+// Live presence over Server-Sent Events. EventSource retries on its own, but not
+// after a server-side close — hence the explicit retry timer.
 export function useSSE(): SSEHookReturn {
-  const [status, setStatus] = useState<Status | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -43,7 +43,7 @@ export function useSSE(): SSEHookReturn {
 
       eventSource.onmessage = (event) => {
         try {
-          setStatus(JSON.parse(event.data) as Status);
+          setSnapshot(JSON.parse(event.data) as Snapshot);
         } catch {
           setError('Failed to parse server data');
         }
@@ -76,5 +76,5 @@ export function useSSE(): SSEHookReturn {
     connect();
   }, [connect]);
 
-  return { status, isConnected, error, reconnect };
+  return { snapshot, isConnected, error, reconnect };
 }

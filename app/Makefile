@@ -13,62 +13,92 @@ WEB_DIR = web
 BINARY_NAME = mqtt-unifi-network
 DOCKER_IMAGE_NAME = pharndt/mqtt-unifi-network:latest
 
+# The dev config keeps ${UNIFI_USER} / ${UNIFI_PASSWORD} as placeholders so no
+# credential is written to disk. They are decrypted from the chart's sops
+# secrets and exported for the lifetime of the process only.
+SECRETS = $(HOME)/dev/smarthome/homeserver-gitops/cluster/charts/mqtt/unifi-network/values/secrets.yaml
+WITH_CREDS = UNIFI_USER=$$(sops -d $(SECRETS) | awk '/UNIFI_USER:/{print $$2; exit}') \
+             UNIFI_PASSWORD=$$(sops -d $(SECRETS) | awk '/UNIFI_PASSWORD:/{print $$2; exit}')
+
+# Bare `make` prints the targets rather than doing something surprising.
+.DEFAULT_GOAL := help
+
+.PHONY: help
+help: ## Show this help
+	@echo "mqtt-unifi-network — make targets"
+	@echo
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@echo
+	@echo "Config: $(CONFIG_DIR)/config.json"
+
 .PHONY: build
-build: build-frontend build-backend
+build: build-frontend build-backend ## Build frontend and backend
 
 .PHONY: version
-version:
+version: ## Print the version stamped into the binary
 	@echo "Version: $(VERSION)"
 	@echo "Git Commit: $(GIT_COMMIT)"
 	@echo "Build Time: $(BUILD_TIME)"
 
 .PHONY: build-frontend
-build-frontend:
+build-frontend: ## Build the web UI
 	@echo "Building the frontend..."
 	@cd $(WEB_DIR) && pnpm install && pnpm run build
 
 .PHONY: build-backend
-build-backend:
+build-backend: ## Build the Go binary
 	@echo "Building the backend..."
 	@$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
 
 .PHONY: dev
-dev: build-frontend build-backend
+dev: build-frontend build-backend ## Build everything and run against the local config
 	@echo "Starting the application..."
-	@$(BUILD_DIR)/$(BINARY_NAME) $(CONFIG_DIR)/config.json
+	@$(WITH_CREDS) $(BUILD_DIR)/$(BINARY_NAME) $(CONFIG_DIR)/config.json
 
 .PHONY: dev-frontend
-dev-frontend:
+dev-frontend: ## Vite dev server on :5173, talking to the backend on :8080
 	@echo "Starting frontend dev server..."
 	@cd $(WEB_DIR) && pnpm run dev
 
 .PHONY: dev-backend
-dev-backend: build-backend
+dev-backend: build-backend ## Build and run only the backend
 	@echo "Starting backend dev server..."
-	@$(BUILD_DIR)/$(BINARY_NAME) $(CONFIG_DIR)/config.json
+	@$(WITH_CREDS) $(BUILD_DIR)/$(BINARY_NAME) $(CONFIG_DIR)/config.json
 
 .PHONY: run
-run: build
+run: build ## Alias for dev
 	@echo "Running the application..."
-	@$(BUILD_DIR)/$(BINARY_NAME) $(CONFIG_DIR)/config.json
+	@$(WITH_CREDS) $(BUILD_DIR)/$(BINARY_NAME) $(CONFIG_DIR)/config.json
 
 .PHONY: test
-test:
+test: ## Run the Go tests
 	@$(GO) test ./...
 
+.PHONY: fmt
+fmt: ## Format the Go sources
+	@gofmt -w .
+
+.PHONY: vet
+vet: ## Run go vet
+	@$(GO) vet ./...
+
+.PHONY: check
+check: fmt vet test ## Format, vet and test — run before a release
+
 .PHONY: docker
-docker:
+docker: ## Build the Docker image locally
 	@echo "Building Docker image..."
 	@docker build -t $(DOCKER_IMAGE_NAME) .
 
 .PHONY: clean
-clean:
+clean: ## Remove build output and node_modules
 	@echo "Cleaning up..."
 	@rm -rf $(BUILD_DIR)
 	@cd $(WEB_DIR) && rm -rf dist node_modules
 
 .PHONY: deps
-deps:
+deps: ## Download and tidy Go dependencies
 	@echo "Downloading Go dependencies..."
 	@$(GO) mod download
 	@$(GO) mod tidy
