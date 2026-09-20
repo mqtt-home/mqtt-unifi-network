@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -42,7 +43,31 @@ func publishAvailability(online bool) {
 	if online {
 		payload = "online"
 	}
+	available.Store(online)
 	mqtt.PublishAbsolute(cfg.MQTT.Topic+"/availability", payload, true)
+}
+
+// available is what this instance last said about itself.
+var available atomic.Bool
+
+// guardAvailability corrects an availability that contradicts what this
+// instance knows. The goodbye at shutdown is right when the bridge really
+// stops, but in a rolling update the outgoing pod says "offline" after its
+// replacement said "online" - and consumers would distrust live presence data
+// until the next restart. Same idea as mqtt-gateway's guard on bridge/state.
+func guardAvailability() {
+	cfg := config.Get()
+	topic := cfg.MQTT.Topic + "/availability"
+	mqtt.Subscribe(topic, func(_ string, payload []byte) {
+		if string(payload) != "offline" || !available.Load() {
+			return
+		}
+		// Never publish-and-wait inside an MQTT callback: it deadlocks the client.
+		go func() {
+			logger.Info("Availability says offline while we are online, correcting", "topic", topic)
+			publishAvailability(true)
+		}()
+	})
 }
 
 // publishSnapshot writes the changed parts of a snapshot to MQTT.
@@ -268,6 +293,7 @@ func main() {
 	// Seed a retained offline before connecting, so the availability topic is
 	// never absent and consumers start from a safe default.
 	publishAvailability(false)
+	guardAvailability()
 
 	tracker = unifi.NewTracker(cfg.UniFi)
 	client = unifi.NewClient(
